@@ -1,0 +1,13 @@
+Flask==2.2.3
+PyPDF2==3.0.1
+langchain==0.0.159
+openai==0.27.2
+transformers==4.30.2
+Werkzeug==2.3.3
+reportlab==3.6.0
+Jinja2==3.1.2
+itsdangerous==2.1.2
+chromadb
+pymupdf
+zipp
+monotonic

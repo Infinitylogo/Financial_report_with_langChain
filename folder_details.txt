@@ -1,0 +1,9 @@
+financial-analysis-app/
+├── app.py               # Main Flask app
+├── requirements.txt     # Dependencies list
+├── utils/
+│   ├── pdf_parser.py    # PDF text extraction logic
+│   └── financial_logic.py # Functions to calculate ratios and classify risk
+├── uploads/             # Folder to store uploaded PDFs
+└── templates/
+    └── index.html       # HTML page for uploading PDFs (optional)
