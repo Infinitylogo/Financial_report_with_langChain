@@ -1,10 +1,10 @@
 import os
-from flask import Flask, request, jsonify
+from quart import Quart, request, jsonify
 from werkzeug.utils import secure_filename
 from utils.pdf_parser import extract_text_from_pdf
 from utils.financial_logic import process_financial_report
 
-app = Flask(__name__)
+app = Quart(__name__)
 
 # Configuration for uploads
 UPLOAD_FOLDER = 'uploads'
@@ -17,7 +17,7 @@ def allowed_file(filename):
 
 # Route for home page (optional, for testing)
 @app.route('/')
-def index():
+async def index():
     return '''
     <!doctype html>
     <title>Upload PDF</title>
@@ -30,28 +30,48 @@ def index():
 
 # API route to upload PDF and process the file
 @app.route('/upload', methods=['POST'])
-def upload_file():
+async def upload_file():
+    # Check if the file part is in the request
     if 'file' not in request.files:
         return jsonify({"error": "No file part in the request"}), 400
 
     file = request.files['file']
+    
+    # Check if a file was selected
     if file.filename == '':
         return jsonify({"error": "No selected file"}), 400
 
-    if file and allowed_file(file.filename):
+    # Check if the file is allowed (PDF)
+    if not allowed_file(file.filename):
+        return jsonify({"error": "Invalid file type, only PDFs are allowed"}), 400
+
+    try:
+        # Secure the filename and save the file asynchronously
         filename = secure_filename(file.filename)
         file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-        file.save(file_path)
+        await file.save(file_path)
+    except Exception as e:
+        return jsonify({"error": f"Failed to save file: {str(e)}"}), 500
 
-        # Process the PDF file
-        try:
-            response = process_financial_report(file_path)
-            return jsonify(response), 200
-        except Exception as e:
-            return jsonify({"error": str(e)}), 500
+    # Process the PDF file for financial analysis asynchronously
+    try:
+        response = await process_financial_report_async(file_path)
+        
+        # Check if processing returned any errors
+        if "error" in response:
+            return jsonify({"error": response["error"]}), 400
+        
+        # If processing is successful
+        return jsonify(response), 200
+    except Exception as e:
+        return jsonify({"error": f"An error occurred during processing: {str(e)}"}), 500
 
-    return jsonify({"error": "Invalid file type"}), 400
+# Asynchronous version of process_financial_report (example)
+async def process_financial_report_async(pdf_path):
+    # Async wrapper for your existing processing logic
+    return await process_financial_report(pdf_path)
 
+# Create upload folder if it doesn't exist
 if __name__ == '__main__':
     os.makedirs(UPLOAD_FOLDER, exist_ok=True)
     app.run(debug=True)
