@@ -31,3 +31,7 @@ curl -X POST http://localhost:5000/upload -F "file=@apple_statements.pdf"
   "P/E Ratio": 19.166210045662098,
   "ROI": 9.593962332467738,
   "Risk": "Moderate Risk"}
+
+
+data download links:--
+https://www.apple.com/newsroom/pdfs/fy2024-q1/FY24_Q1_Consolidated_Financial_Statements.pdf

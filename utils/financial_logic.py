@@ -10,7 +10,7 @@ chunk_size = 10 #to control how many pages are processed in each iteration
 
 
 # # Set up your OpenAI API key
-os.environ["OPENAI_API_KEY"] = "my_key"
+os.environ["OPENAI_API_KEY"] = "open_api_key"
 # Initialize LangChain with OpenAI LLM
 # llm = OpenAI(temperature=0)
 
@@ -96,8 +96,7 @@ def extract_data_from_report(report_text):
         return {"error": f"Failed to get response from LLM: {str(e)}"}
     
     # Extract the text part of the response
-    response_text = response  # Assuming it's a string output, adjust if response format differs
-
+    response_text = response
     data_dict = {}
     
     # Define regex patterns for extraction
