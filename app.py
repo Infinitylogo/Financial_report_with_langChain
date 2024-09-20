@@ -33,10 +33,10 @@ async def index():
 @app.route('/upload', methods=['POST'])
 async def upload_file():
     # Check if the file part is in the request
-    if 'file' not in request.files:
+    if 'file' not in (await request.files):
         return jsonify({"error": "No file part in the request"}), 400
 
-    file = request.files['file']
+    file = (await request.files)['file']
     
     # Check if a file was selected
     if file.filename == '':
