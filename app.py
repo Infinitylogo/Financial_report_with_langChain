@@ -3,6 +3,7 @@ from quart import Quart, request, jsonify
 from werkzeug.utils import secure_filename
 from utils.pdf_parser import extract_text_from_pdf
 from utils.financial_logic import process_financial_report
+import asyncio
 
 app = Quart(__name__)
 
@@ -66,10 +67,9 @@ async def upload_file():
     except Exception as e:
         return jsonify({"error": f"An error occurred during processing: {str(e)}"}), 500
 
-# Asynchronous version of process_financial_report (example)
 async def process_financial_report_async(pdf_path):
-    # Async wrapper for your existing processing logic
-    return await process_financial_report(pdf_path)
+    # Run the synchronous function in a separate thread to avoid blocking
+    return await asyncio.to_thread(process_financial_report, pdf_path)
 
 # Create upload folder if it doesn't exist
 if __name__ == '__main__':
