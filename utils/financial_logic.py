@@ -11,7 +11,7 @@ chunk_size = 10 #to control how many pages are processed in each iteration
 
 
 # # Set up your OpenAI API key
-os.environ["OPENAI_API_KEY"] = "you_key"
+os.environ["OPENAI_API_KEY"] = "your_key"
 # Initialize LangChain with OpenAI LLM
 # llm = OpenAI(temperature=0)
 
@@ -184,6 +184,133 @@ def extract_data_from_report(report_text):
         Summary: <Provide a brief summary of the company's financial health and performance based on the above ratios and suggest if it aligns with typical IT industry health benchmarks.>
         ```
     """
+
+    third_template = """
+        You are the CFO of a company, tasked with analyzing the financial ratios from the provided financial report in Indian Rupees (INR). Your goal is to extract key financial data, compute essential financial ratios, assess the company's financial health, and provide investment risk insights.
+
+        ### Data Extraction:
+        Extract the following financial data from the provided text and **convert all currency values to INR**. **Remove any non-INR currency symbols** and **convert amounts in millions to their actual values** (e.g., 1 million becomes 1,000,000). Assume any non-INR amounts should be converted based on an exchange rate you specify (e.g., 1 USD = 83 INR). Include the conversion in the report.
+
+        - **Earnings Per Share (EPS) (INR)**
+        - **Stock Price (INR)**
+        - **Net Income (e.g., Net Profit, Net Earnings, Income After Tax) (INR)**
+        - **Total Investment (e.g., Total Capital, Capital Investment, Total Funds, Total Capital Employed, Capital Expenditure) (INR)**: Ensure that terms like "Total Capital Employed" or "Total Capital Expenditure" are included in the extraction process to find `Total Investment`. (If missing, mark as "Not Available")
+        - **Current Assets (INR)**
+        - **Current Liabilities (INR)**
+        - **Gross Profit (INR)**
+        - **Net Revenue (INR)** (If missing, mark as "Not Available")
+        - **Total Debt (INR)**
+        - **Total Shareholders' Equity (INR)**
+        - **Operating Cash Flow (INR)**
+
+        **Note**: If amounts are in millions, convert them to their actual values. If values are in USD or any non-INR currency, convert them to INR at an exchange rate you specify. Remove all currency symbols or signs and convert them to INR as float numbers.
+
+        Text:
+        {text}
+
+        ### Financial Ratio Calculations:
+        Using the extracted financial data (in INR), compute the following ratios:
+
+        - **Current Ratio**: `Current Ratio = Current Assets / Current Liabilities`
+        - **Gross Profit Margin**: If `Net Revenue` is available, `Gross Profit Margin = (Gross Profit / Net Revenue) * 100`, otherwise return "Not Available".
+        - **Debt to Equity Ratio**: `D/E Ratio = Total Debt / Total Shareholders' Equity`
+        - **Operating Cash Flow**: Report this as a standalone value.
+        - **Price to Earnings (P/E) Ratio**: `P/E Ratio = Stock Price / Earnings Per Share (EPS)`
+        - **Return on Investment (ROI)**: If both `Net Income` and `Total Investment` are available, `ROI = (Net Income / Total Investment) * 100`. If either is missing, return "Not Available".
+
+        ### Health and Investment Risk Assessment:
+        Based on the calculated ratios, assess whether the investment is risky or not. Provide insight into the **health ratio for the IT industry** and how the company's ratios compare to industry benchmarks.
+
+        ### Output Format:
+        Answer in this format:
+
+        ```plaintext
+        EPS (INR): <value>
+        Stock Price (INR): <value>
+        Net Income (INR): <value>
+        Total Investment (INR): <value> (If missing, mark as "Not Available")
+        Current Assets (INR): <value>
+        Current Liabilities (INR): <value>
+        Gross Profit (INR): <value>
+        Net Revenue (INR): <value> (If missing, mark as "Not Available")
+        Total Debt (INR): <value>
+        Total Shareholders' Equity (INR): <value>
+        Operating Cash Flow (INR): <value>
+        Current Ratio: <value>
+        Gross Profit Margin: <value> (If missing, return "Not Available")
+        D/E Ratio: <value>
+        P/E Ratio: <value>
+        ROI: <value> (If either Net Income or Total Investment is missing, return "Not Available")
+        Investment Risk: <Risk Assessment - e.g., "Risky" or "Not Risky">
+        Industry Health Ratio: <Industry-specific ratio analysis>
+        Summary: <Provide a brief summary of the company's financial health and performance based on the above ratios and suggest if it aligns with typical IT industry health benchmarks.> 
+        """
+    
+    template = """
+        You are the CFO of a company, tasked with analyzing the financial ratios from the provided financial report in Indian Rupees (INR). Your goal is to extract key financial data, compute essential financial ratios, assess the company's financial health, and provide investment risk insights.
+
+        ### Data Extraction:
+        Extract the following financial data from the provided text and **convert all currency values to INR**. **Remove any non-INR currency symbols** and **convert amounts in millions to their actual values** (e.g., 1 million becomes 1,000,000). Assume any non-INR amounts should be converted based on an exchange rate you specify (e.g., 1 USD = 83 INR). Include the conversion in the report.
+
+        - **Earnings Per Share (EPS) (INR)**
+        - **Stock Price (INR)**
+        - **Net Income (e.g., Net Profit, Net Earnings, Income After Tax) (INR)**
+        - **Total Investment (e.g., Total Capital, Capital Investment, Total Funds, Total Capital Employed, Capital Expenditure) (INR)**:
+        - Look for terms such as **"Total Capital"**, **"Capital Investment"**, **"Total Funds"**, **"Total Capital Employed"**, **"Capital Expenditure"**, or **similar terms** that indicate total investment.
+        - If none of these terms are directly available, compute **Total Investment** as the sum of **Total Debt** and **Total Shareholders' Equity**.
+        - Use this value to calculate **ROI (Return on Investment)** using the formula: 
+            - ROI = (Net Income / Total Investment) * 100.
+        - If the term or value is missing, mark as "Not Available".
+        - **Current Assets (INR)**
+        - **Current Liabilities (INR)**
+        - **Gross Profit (INR)**
+        - **Net Revenue (INR)** (If missing, mark as "Not Available")
+        - **Total Debt (INR)**
+        - **Total Shareholders' Equity (INR)**
+        - **Operating Cash Flow (INR)**
+
+        **Note**: If amounts are in millions, convert them to their actual values. If values are in USD or any non-INR currency, convert them to INR at an exchange rate you specify. Remove all currency symbols or signs and convert them to INR as float numbers.
+
+        Text:
+        {text}
+
+        ### Financial Ratio Calculations:
+        Using the extracted financial data (in INR), compute the following ratios:
+
+        - **Current Ratio**: `Current Ratio = Current Assets / Current Liabilities`
+        - **Gross Profit Margin**: If `Net Revenue` is available, `Gross Profit Margin = (Gross Profit / Net Revenue) * 100`, otherwise return "Not Available".
+        - **Debt to Equity Ratio**: `D/E Ratio = Total Debt / Total Shareholders' Equity`
+        - **Operating Cash Flow**: Report this as a standalone value.
+        - **Price to Earnings (P/E) Ratio**: `P/E Ratio = Stock Price / Earnings Per Share (EPS)`
+        - **Return on Investment (ROI)**: If both `Net Income` and `Total Investment` are available, `ROI = (Net Income / Total Investment) * 100`. If either is missing, return "Not Available".
+
+        ### Health and Investment Risk Assessment:
+        Based on the calculated ratios, assess whether the investment is risky or not. Provide insight into the **health ratio for the IT industry** and how the company's ratios compare to industry benchmarks.
+
+        ### Output Format:
+        Answer in this format:
+
+        ```plaintext
+        EPS (INR): <value>
+        Stock Price (INR): <value>
+        Net Income (INR): <value>
+        Total Investment (INR): <value> (If missing, mark as "Not Available")
+        Current Assets (INR): <value>
+        Current Liabilities (INR): <value>
+        Gross Profit (INR): <value>
+        Net Revenue (INR): <value> (If missing, mark as "Not Available")
+        Total Debt (INR): <value>
+        Total Shareholders' Equity (INR): <value>
+        Operating Cash Flow (INR): <value>
+        Current Ratio: <value>
+        Gross Profit Margin: <value> (If missing, return "Not Available")
+        D/E Ratio: <value>
+        P/E Ratio: <value>
+        ROI: <value> (If either Net Income or Total Investment is missing, return "Not Available")
+        Investment Risk: <Risk Assessment - e.g., "Risky" or "Not Risky">
+        Industry Health Ratio: <Industry-specific ratio analysis>
+        Summary: <Provide a brief summary of the company's financial health and performance based on the above ratios and suggest if it aligns with typical IT industry health benchmarks.> 
+        """
     
     messages = [
             SystemMessage(content="You are a financial assistant."),

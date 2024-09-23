@@ -83,6 +83,31 @@ After adjusting the prompt and improving the model's accuracy, the following res
 Note :-- Able to Extract ROI and total investment but the result deviation for other attribute is too huge, that need to fix or to check which one is the correct one .
 
 
+After updating the template and adding extra synomys or search items for the total investment getting proper respose:--
+
+FINAL OUTCOMES:--->>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
+{
+  "Current Assets (INR)": 184257000000.0,
+  "Current Liabilities (INR)": 104149000000.0,
+  "Current Ratio": 1.77,
+  "D/E Ratio": 0.23,
+  "EPS (INR)": 9.68,
+  "Gross Profit (INR)": 146052000000.0,
+  "Gross Profit Margin": 68.94,
+  "Industry Health Ratio": "The IT industry typically has a current ratio above 1.5 and a D/E ratio below 1.0 indicating a healthy balance between debt and equity",
+  "Investment Risk": "Not Risky",
+  "Net Income (INR)": 72361000000.0,
+  "Net Revenue (INR)": 211915000000.0,
+  "Operating Cash Flow (INR)": 87582000000.0,
+  "P/E Ratio": 26.0,
+  "ROI": 35.1,
+  "Stock Price (INR)": 252.59,
+  "Summary": "The companys financial health appears strong with a current ratio of 1.77 indicating good short-term liquidity and a low D/E ratio of 0.23 suggesting a conservative approach to leveraging. The gross profit margin of 68.94% is robust reflecting effective cost management and pricing strategies. The P/E ratio of 26.00 is reasonable for the IT sector indicating that the stock is fairly valued relative to its earnings. Overall these ratios align well with typical IT industry benchmarks suggesting that the company is not considered a risky investment.",
+  "Total Debt (INR)": 47237000000.0,
+  "Total Investment (INR)": 205753000000.0,
+  "Total Shareholders Equity (INR)": 206223000000.0
+}
 
 
 Running the code :--
