@@ -2,7 +2,7 @@
 
 Reason to chose langchain:--
 
-The result for the pdf i am able to achieve is :--
+The results I have been able to achieve for the PDF are as follows :--
 
 curl -X POST http://localhost:5000/upload -F "file=@2023_Annual_Report.pdf"
 
@@ -29,6 +29,6 @@ curl -X POST http://localhost:5000/upload -F "file=@2023_Annual_Report.pdf"
 
 }
 
-still one issue persist which one is, Extracting and calculating the overall ROI and INVESTMENT, i am not getting for some cases.
+I am encountering issues with extracting and calculating the overall ROI and Total Investment for certain cases.
 
-For result:-- Find it in the Results folder there will screenshot of the outputs received.
+For the results, check the Results folder where you will find a screenshot of the outputs received.
