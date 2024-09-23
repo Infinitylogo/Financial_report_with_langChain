@@ -1,7 +1,5 @@
 # Financial_report_with_langChain
 
-Reason to chose langchain:--
-
 The results I have been able to achieve for the PDF are as follows :--
 
 curl -X POST http://localhost:5000/upload -F "file=@2023_Annual_Report.pdf"
