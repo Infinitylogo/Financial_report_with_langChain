@@ -1,8 +1,23 @@
-# Financial_report_with_langChain
+# Financial Report Analysis with LangChain
 
-The results I have been able to achieve for the PDF are as follows :--
+This project utilizes LangChain and OpenAI's GPT-4 model to extract and analyze financial data from company PDF reports. The objective is to retrieve key financial metrics, calculate ratios (like P/E ratio, ROI), and classify the investment risk based on these metrics.
 
-curl -X POST http://localhost:5000/upload -F "file=@2023_Annual_Report.pdf"
+## Features
+
+- **Financial Data Extraction**: Automatically extracts key financial figures from PDF reports, such as Net Income, Total Debt, and EPS (Earnings Per Share).
+- **Financial Ratios**: Calculates important financial ratios like the Current Ratio, Debt-to-Equity (D/E) Ratio, and Gross Profit Margin.
+- **Investment Risk Analysis**: Classifies the company's risk based on industry benchmarks and calculated ratios.
+- **Industry Benchmark Comparison**: Compares company data to typical IT industry health ratios.
+
+## API Usage
+
+To upload and process a PDF report, use the following API call:
+
+```bash
+curl -X POST http://localhost:5000/upload -F "file=@<your_pdf_report>.pdf"
+
+
+The API returns a JSON response with the extracted data. Example output from a sample PDF:
 
 {
   "Current Assets (INR)": 184257000000.0,
@@ -20,13 +35,57 @@ curl -X POST http://localhost:5000/upload -F "file=@2023_Annual_Report.pdf"
   "P/E Ratio": 26.67,
   "ROI": "Not Available",
   "Stock Price (INR)": 252.59,
-  "Summary": "The company's financial health appears strong with a current ratio of 1.77 indicating good short-term liquidity and a low D/E ratio of 0.23 suggesting a conservative approach to leverage. The gross profit margin of 68.94% is robust reflecting efficient operations. The P/E ratio of 26.67 is reasonable for the IT sector indicating that the stock is fairly valued relative to its earnings. Overall the company's performance aligns well with typical IT industry health benchmarks suggesting it is not a risky investment.",
+  "Summary": "The company's financial health appears strong with a current ratio of 1.77 indicating good short-term liquidity...",
   "Total Debt (INR)": 47237000000.0,
   "Total Investment (INR)": "Not Available",
   "Total Shareholders' Equity (INR)": 206223000000.0
-
 }
 
-I am encountering issues with extracting and calculating the overall ROI and Total Investment for certain cases.
 
-For the results, check the Results folder where you will find a screenshot of the outputs received.
+Note: The ROI and Total Investment values may sometimes be unavailable. For details on the extraction challenges and improvement strategies, refer to the sections below.
+
+Extraction Issues & Approaches Tried
+1. Broadened Search for Total Investment:
+
+    - **Expanded search terms to include synonyms like Total Capital, Capital Employed, Capital Expenditure, Total Funds, etc.
+    - **In cases where these terms are missing, we try to estimate Total Investment by reverse-calculating it from available data like Net Income and industry ROIs.
+
+2. Enhanced ROI Calculation:
+    If Total Investment is missing, we attempt to calculate ROI using known financial figures or industry-standard ratios.
+    Improvements and Results
+
+
+After adjusting the prompt and improving the model's accuracy, the following results were achieved:
+
+
+{
+  "Current Assets (INR)": 5000000.0,
+  "Current Liabilities (INR)": 2500000.0,
+  "Current Ratio": 2.0,
+  "D/E Ratio": 0.43,
+  "EPS (INR)": 15.0,
+  "Gross Profit (INR)": 2000000.0,
+  "Gross Profit Margin": 40.0,
+  "Industry Health Ratio": "The average current ratio for the IT industry is around 1.5 to 2.5 and the average D/E ratio is typically below 1.",
+  "Investment Risk": "Not Risky",
+  "Net Income (INR)": 1500000.0,
+  "Net Revenue (INR)": 5000000.0,
+  "Operating Cash Flow (INR)": 1200000.0,
+  "P/E Ratio": 20.0,
+  "ROI": 15.0,
+  "Stock Price (INR)": 300.0,
+  "Summary": "The company's financial health appears strong with a current ratio of 2.00 indicating good short-term liquidity...",
+  "Total Debt (INR)": 3000000.0,
+  "Total Investment (INR)": 10000000.0,
+  "Total Shareholders' Equity (INR)": 7000000.0
+}
+
+Note :-- Able to Extract ROI and total investment but the result deviation for other attribute is too huge, that need to fix or to check which one is the correct one .
+
+
+
+
+Running the code :--
+Create new environment for conda 
+pip install -r requirements.txt
+python app.py
