@@ -3,6 +3,7 @@ from quart import Quart, request, jsonify
 from werkzeug.utils import secure_filename
 from utils.pdf_parser import extract_text_from_pdf
 from utils.financial_logic import process_financial_report
+from utils.RAG_for_document_retrival import pdf_processing_with_rag_for_financial_data, process_financial_report_using_rag_retriver
 import asyncio
 
 app = Quart(__name__)
@@ -69,7 +70,11 @@ async def upload_file():
 
 async def process_financial_report_async(pdf_path):
     # Run the synchronous function in a separate thread to avoid blocking
-    return await asyncio.to_thread(process_financial_report, pdf_path)
+    ## RAG IMPLEMENTATION
+    # return await asyncio.to_thread(pdf_processing_with_rag_for_financial_data, pdf_path)
+    return await asyncio.to_thread(process_financial_report_using_rag_retriver, pdf_path)
+    # return await asyncio.to_thread(process_financial_report, pdf_path)
+    
 
 # Create upload folder if it doesn't exist
 if __name__ == '__main__':

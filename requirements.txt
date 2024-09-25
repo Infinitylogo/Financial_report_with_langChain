@@ -11,3 +11,6 @@ chromadb
 pymupdf
 zipp
 monotonic
+chromadb
+lark
+faiss-cpu
