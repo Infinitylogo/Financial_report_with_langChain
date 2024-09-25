@@ -13,18 +13,20 @@ import re
 from langchain.vectorstores import FAISS
 from utils.pdf_parser import extract_text_from_pdf
 from langchain.docstore.document import Document
+from langchain.chains.qa_with_sources import load_qa_with_sources_chain
 
 
 # from langchain.retrievers import VectorstoreRetriever
-
 # from langchain.vectorstores import VectorstoreRetriever
 
 
 # Set up your OpenAI API key
-os.environ["OPENAI_API_KEY"] = "key_here"
+os.environ["OPENAI_API_KEY"] = "key value here"
 
-# llm = ChatOpenAI(model_name="gpt-4", temperature=0)
-llm = ChatOpenAI(model_name="gpt-4o-mini", temperature=0)
+llm = ChatOpenAI(model_name="gpt-4", temperature=0)
+# llm = ChatOpenAI(model_name="gpt-3.5-turbo", temperature=0)
+
+# llm = ChatOpenAI(model_name="gpt-4o-mini", temperature=0)
 
 # chunk size for processing PDFs
 chunk_size = 1000 
@@ -42,109 +44,93 @@ def load_documents_to_chroma(documents, chunk_size=1000):
     vectorstore.add_documents(split_docs)
     return vectorstore
 
+
 def create_rag_pipeline(vectorstore):
-    retriever = vectorstore.as_retriever()
-    rag_chain = RetrievalQA(llm=llm, retriever=retriever)
-    return rag_chain
+    # Define how to combine the retrieved documents into a response
+    llm = ChatOpenAI(model_name="gpt-4", temperature=0)
+    combine_documents_chain = load_qa_with_sources_chain(llm)
+
+    # Create the RAG pipeline
+    qa_chain = RetrievalQA.from_chain_type(
+        retriever=vectorstore.as_retriever(),  
+        chain_type="stuff",  
+        combine_documents_chain=combine_documents_chain,
+        llm=llm 
+    )
+    
+    return qa_chain
+
 
 def process_pdf_with_rag(pdf_path):
+    # Step 1: Extract text from the PDF
     report_text = extract_text_from_pdf(pdf_path)
     if not report_text:
         return {"error": "Failed to extract text from PDF"}
+    
+    print("Extracted report_text:", report_text)
 
-    # Assume documents are loaded into a Chroma database
+    # Step 2: Initialize document and load into Chroma vector store
     document = Document(page_content=report_text)
-    vectorstore = load_documents_to_chroma([document])
+    try:
+        vectorstore = load_documents_to_chroma([document])
+    except Exception as e:
+        return {"error": f"Failed to load documents into Chroma: {str(e)}"}
+    
+    # Step 3: Create RAG pipeline
+    try:
+        rag_chain = create_rag_pipeline(vectorstore)
+    except Exception as e:
+        return {"error": f"Failed to create RAG pipeline: {str(e)}"}
+    
+    # Step 4: Define financial prompt
+    financial_prompt =  """
+    You are a financial analyst. Extract key financial data from the following report and convert all values to INR. 
+    Assume the exchange rate is 1 USD = 83 INR if required. All amounts in millions should be converted to actual values.
+    
+    ### Data to extract:
+    1. **Earnings Per Share (EPS)** (INR)
+    2. **Stock Price** (INR)
+    3. **Net Income** (INR)
+    4. **Total Investment** (INR)
+    5. **Current Assets** (INR)
+    6. **Current Liabilities** (INR)
+    7. **Gross Profit** (INR)
+    8. **Net Revenue** (INR)
+    9. **Total Debt** (INR)
+    10. **Total Shareholders' Equity** (INR)
+    11. **Operating Cash Flow** (INR)
+    
+    ### Calculations:
+    1. **Current Ratio** = Current Assets / Current Liabilities
+    2. **Gross Profit Margin** = (Gross Profit / Net Revenue) * 100 (If Net Revenue is unavailable, return "Not Available")
+    3. **Debt to Equity Ratio** = Total Debt / Total Shareholders' Equity
+    4. **P/E Ratio** = Stock Price / EPS
+    5. **ROI** = (Net Income / Total Investment) * 100
 
-    # Create the RAG pipeline
-    rag_chain = create_rag_pipeline(vectorstore)
-
-    # Define the financial data extraction prompt
-    financial_prompt = """
-        You are the CFO of a company, tasked with analyzing the financial ratios from the provided financial report in Indian Rupees (INR). Your goal is to extract key financial data, compute essential financial ratios, assess the company's financial health, and provide investment risk insights.
-
-        ### Data Extraction:
-        Extract the following financial data from the provided text and **convert all currency values to INR**. **Remove any non-INR currency symbols** and **convert amounts in millions to their actual values** (e.g., 1 million becomes 1,000,000). Assume any non-INR amounts should be converted based on an exchange rate you specify (e.g., 1 USD = 83 INR). Include the conversion in the report.
-
-        - **Earnings Per Share (EPS) (INR)**
-        - **Stock Price (INR)**
-        - **Net Income (e.g., Net Profit, Net Earnings, Income After Tax) (INR)**
-        - **Total Investment (e.g., Total Capital, Capital Investment, Total Funds, Total Capital Employed, Capital Expenditure) (INR)**:
-        - Look for terms such as **"Total Capital"**, **"Capital Investment"**, **"Total Funds"**, **"Total Capital Employed"**, **"Capital Expenditure"**, or **similar terms** that indicate total investment.
-        - If none of these terms are directly available, compute **Total Investment** as the sum of **Total Debt** and **Total Shareholders' Equity**.
-        - Use this value to calculate **ROI (Return on Investment)** using the formula: 
-            - ROI = (Net Income / Total Investment) * 100.
-        - If the term or value is missing, mark as "Not Available".
-        - **Current Assets (INR)**
-        - **Current Liabilities (INR)**
-        - **Gross Profit (INR)**
-        - **Net Revenue (INR)** (If missing, mark as "Not Available")
-        - **Total Debt (INR)**
-        - **Total Shareholders' Equity (INR)**
-        - **Operating Cash Flow (INR)**
-
-        **Note**: If amounts are in millions, convert them to their actual values. If values are in USD or any non-INR currency, convert them to INR at an exchange rate you specify. Remove all currency symbols or signs and convert them to INR as float numbers.
-
-        Text:
-        {text}
-
-        ### Financial Ratio Calculations:
-        Using the extracted financial data (in INR), compute the following ratios:
-
-        - **Current Ratio**: `Current Ratio = Current Assets / Current Liabilities`
-        - **Gross Profit Margin**: If `Net Revenue` is available, `Gross Profit Margin = (Gross Profit / Net Revenue) * 100`, otherwise return "Not Available".
-        - **Debt to Equity Ratio**: `D/E Ratio = Total Debt / Total Shareholders' Equity`
-        - **Operating Cash Flow**: Report this as a standalone value.
-        - **Price to Earnings (P/E) Ratio**: `P/E Ratio = Stock Price / Earnings Per Share (EPS)`
-        - **Return on Investment (ROI)**: If both `Net Income` and `Total Investment` are available, `ROI = (Net Income / Total Investment) * 100`. If either is missing, return "Not Available".
-
-        ### Health and Investment Risk Assessment:
-        Based on the calculated ratios, assess whether the investment is risky or not. Provide insight into the **health ratio for the IT industry** and how the company's ratios compare to industry benchmarks.
-
-        ### Output Format:
-        Answer in this format:
-
-        ```plaintext
-        EPS (INR): <value>
-        Stock Price (INR): <value>
-        Net Income (INR): <value>
-        Total Investment (INR): <value> (If missing, mark as "Not Available")
-        Current Assets (INR): <value>
-        Current Liabilities (INR): <value>
-        Gross Profit (INR): <value>
-        Net Revenue (INR): <value> (If missing, mark as "Not Available")
-        Total Debt (INR): <value>
-        Total Shareholders' Equity (INR): <value>
-        Operating Cash Flow (INR): <value>
-        Current Ratio: <value>
-        Gross Profit Margin: <value> (If missing, return "Not Available")
-        D/E Ratio: <value>
-        P/E Ratio: <value>
-        ROI: <value> (If either Net Income or Total Investment is missing, return "Not Available")
-        Investment Risk: <Risk Assessment - e.g., "Risky" or "Not Risky">
-        Industry Health Ratio: <Industry-specific ratio analysis>
-        Summary: <Provide a brief summary of the company's financial health and performance based on the above ratios and suggest if it aligns with typical IT industry health benchmarks.> 
-        """
+    ### Financial Data:
+    {text}
+    """
+    
+    # Step 5: Prepare the prompt
     prompt = PromptTemplate(template=financial_prompt, input_variables=["text"])
 
-    # Run the RAG pipeline on the report text
-    result = rag_chain.run(prompt.render(text=report_text))
-    print("getting result as ", result)
-    return result
+    # Step 6: Run the RAG pipeline
+    try:
+        result = rag_chain.run(prompt.render(text=report_text))
+        print("Result obtained:", result)
+        return result
+    except Exception as e:
+        return {"error": f"Failed to process RAG pipeline: {str(e)}"}
 
 def pdf_processing_with_rag_for_financial_data(pdf_path):
-    # Step 1: Extract text from PDF
-    report_text = process_pdf_with_rag(pdf_path)
-    if not report_text:
-        return {"error": "Failed to extract text from PDF"}
-
-    # Step 2: Extract financial metrics using LangChain LLM
-    financial_data = report_text 
+    # Process the PDF and extract financial data
+    financial_data = process_pdf_with_rag(pdf_path)
+    
+    # Return financial data or any errors encountered
     if "error" in financial_data:
-        return financial_data  # Return the error if data extraction failed
+        return financial_data
     
     return financial_data
-
 
 
 
@@ -152,120 +138,60 @@ def pdf_processing_with_rag_for_financial_data(pdf_path):
 ############################################### NORMAL IMPLEMENTATION ###########################################################################
 #################################################################################################################################################
 
-
-def validate_financial_data(data_dict):
-    # List of required fields that should not be missing
-    required_fields = [
-        'EPS (INR)', 'Stock Price (INR)', 'Net Income (INR)', 'Total Investment (INR)', 
-        'Current Assets (INR)', 'Current Liabilities (INR)', 'Gross Profit (INR)', 
-        'Net Revenue (INR)', 'Total Debt (INR)', "Total Shareholders' Equity (INR)", 
-        'Operating Cash Flow (INR)', 'Current Ratio', 'Gross Profit Margin', 
-        'D/E Ratio', 'P/E Ratio', 'ROI'
-    ]
-    
-    # Check if any required field is missing
-    missing_fields = [field for field in required_fields if data_dict.get(field) is None]
-    if missing_fields:
-        return False, f"Missing fields: {', '.join(missing_fields)}"
-    
-    # Validate that numeric fields are floats and greater than or equal to zero
-    for key, value in data_dict.items():
-        if key not in ['Investment Risk', 'Summary']:  # Skip non-numeric fields
-            if not isinstance(value, float) or value < 0:
-                return False, f"Invalid value for {key}: {value}"
-    
-    return True, None
-
-
 def extract_data_from_report(report_text):
+    print('Report text being processed:', report_text)
+    
+    # Split the report text into chunks
     text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=100)
     texts = text_splitter.split_text(report_text)
 
-    # Convert text to Document objects
+    # Convert text to Document objects for FAISS indexing
     docs = [Document(page_content=text) for text in texts]
 
-    # Create embeddings
+    # Create embeddings and vector store
     embeddings = OpenAIEmbeddings()
-
-    # Create FAISS vector store
     vectorstore = FAISS.from_documents(docs, embeddings)
 
-    # Create retriever
+    # Create a retriever to fetch relevant documents
     retriever = vectorstore.as_retriever()
 
-    # Query relevant documents
+    # Query the relevant financial data
     query = "Extract financial data and ratios from the financial report."
     relevant_docs = retriever.get_relevant_documents(query)
 
-    # Concatenate retrieved text
+    # Concatenate retrieved texts
     retrieved_text = " ".join([doc.page_content for doc in relevant_docs])
 
-    # Prepare the prompt
+    # Prepare the prompt with the extracted text
     template = """
-        You are the CFO of a company, tasked with analyzing the financial ratios from the provided financial report in Indian Rupees (INR). Your goal is to extract key financial data, compute essential financial ratios, assess the company's financial health, and provide investment risk insights.
+    You are a financial analyst. Extract key financial data from the following report and convert all values to INR. 
+    Assume the exchange rate is 1 USD = 83 INR if required. All amounts in millions should be converted to actual values.
+    
+    ### Data to extract:
+    1. **Earnings Per Share (EPS)** (INR)
+    2. **Stock Price** (INR)
+    3. **Net Income** (INR)
+    4. **Total Investment** (INR)
+    5. **Current Assets** (INR)
+    6. **Current Liabilities** (INR)
+    7. **Gross Profit** (INR)
+    8. **Net Revenue** (INR)
+    9. **Total Debt** (INR)
+    10. **Total Shareholders' Equity** (INR)
+    11. **Operating Cash Flow** (INR)
+    
+    ### Calculations:
+    1. **Current Ratio** = Current Assets / Current Liabilities
+    2. **Gross Profit Margin** = (Gross Profit / Net Revenue) * 100 (If Net Revenue is unavailable, return "Not Available")
+    3. **Debt to Equity Ratio** = Total Debt / Total Shareholders' Equity
+    4. **P/E Ratio** = Stock Price / EPS
+    5. **ROI** = (Net Income / Total Investment) * 100
 
-        ### Data Extraction:
-        Extract the following financial data from the provided text and **convert all currency values to INR**. **Remove any non-INR currency symbols** and **convert amounts in millions to their actual values** (e.g., 1 million becomes 1,000,000). Assume any non-INR amounts should be converted based on an exchange rate you specify (e.g., 1 USD = 83 INR). Include the conversion in the report.
-
-        - **Earnings Per Share (EPS) (INR)**
-        - **Stock Price (INR)**
-        - **Net Income (e.g., Net Profit, Net Earnings, Income After Tax) (INR)**
-        - **Total Investment (e.g., Total Capital, Capital Investment, Total Funds, Total Capital Employed, Capital Expenditure) (INR)**:
-        - Look for terms such as **"Total Capital"**, **"Capital Investment"**, **"Total Funds"**, **"Total Capital Employed"**, **"Capital Expenditure"**, or **similar terms** that indicate total investment.
-        - If none of these terms are directly available, compute **Total Investment** as the sum of **Total Debt** and **Total Shareholders' Equity**.
-        - Use this value to calculate **ROI (Return on Investment)** using the formula: 
-            - ROI = (Net Income / Total Investment) * 100.
-        - If the term or value is missing, mark as "Not Available".
-        - **Current Assets (INR)**
-        - **Current Liabilities (INR)**
-        - **Gross Profit (INR)**
-        - **Net Revenue (INR)** (If missing, mark as "Not Available")
-        - **Total Debt (INR)**
-        - **Total Shareholders' Equity (INR)**
-        - **Operating Cash Flow (INR)**
-
-        **Note**: If amounts are in millions, convert them to their actual values. If values are in USD or any non-INR currency, convert them to INR at an exchange rate you specify. Remove all currency symbols or signs and convert them to INR as float numbers.
-
-        Text:
-        {text}
-
-        ### Financial Ratio Calculations:
-        Using the extracted financial data (in INR), compute the following ratios:
-
-        - **Current Ratio**: `Current Ratio = Current Assets / Current Liabilities`
-        - **Gross Profit Margin**: If `Net Revenue` is available, `Gross Profit Margin = (Gross Profit / Net Revenue) * 100`, otherwise return "Not Available".
-        - **Debt to Equity Ratio**: `D/E Ratio = Total Debt / Total Shareholders' Equity`
-        - **Operating Cash Flow**: Report this as a standalone value.
-        - **Price to Earnings (P/E) Ratio**: `P/E Ratio = Stock Price / Earnings Per Share (EPS)`
-        - **Return on Investment (ROI)**: If both `Net Income` and `Total Investment` are available, `ROI = (Net Income / Total Investment) * 100`. If either is missing, return "Not Available".
-
-        ### Health and Investment Risk Assessment:
-        Based on the calculated ratios, assess whether the investment is risky or not. Provide insight into the **health ratio for the IT industry** and how the company's ratios compare to industry benchmarks.
-
-        ### Output Format:
-        Answer in this format:
-
-        ```plaintext
-        EPS (INR): <value>
-        Stock Price (INR): <value>
-        Net Income (INR): <value>
-        Total Investment (INR): <value> (If missing, mark as "Not Available")
-        Current Assets (INR): <value>
-        Current Liabilities (INR): <value>
-        Gross Profit (INR): <value>
-        Net Revenue (INR): <value> (If missing, mark as "Not Available")
-        Total Debt (INR): <value>
-        Total Shareholders' Equity (INR): <value>
-        Operating Cash Flow (INR): <value>
-        Current Ratio: <value>
-        Gross Profit Margin: <value> (If missing, return "Not Available")
-        D/E Ratio: <value>
-        P/E Ratio: <value>
-        ROI: <value> (If either Net Income or Total Investment is missing, return "Not Available")
-        Investment Risk: <Risk Assessment - e.g., "Risky" or "Not Risky">
-        Industry Health Ratio: <Industry-specific ratio analysis>
-        Summary: <Provide a brief summary of the company's financial health and performance based on the above ratios and suggest if it aligns with typical IT industry health benchmarks.> 
-        """
+    ### Financial Data:
+    {text}
+    """
+    
+    print('Retrieved text:', retrieved_text)
     prompt = template.format(text=retrieved_text)
 
     # LLM interaction
@@ -274,15 +200,17 @@ def extract_data_from_report(report_text):
             {"role": "system", "content": "You are a financial assistant."},
             {"role": "user", "content": prompt}
         ]
-        response = llm(messages)
-        response_text =  response.content
+        response = llm.invoke(messages)  # Use invoke instead of __call__
+        if response.content:
+            response_text = response.content
+        else:
+            raise ValueError("No content returned from LLM.")
     except Exception as e:
         return {"error": f"Failed to get response from LLM: {str(e)}"}
-    
+
     # Convert the response text to a dictionary
-    print("getting respose from llm is :-- ", response_text)
+    print("Response from LLM:", response_text)
     data_dict = convert_text_to_dict(response_text)
-    # print("Extracted Data Dictionary:", data_dict)
     return data_dict
 
 
@@ -306,17 +234,20 @@ def convert_text_to_dict(text):
 
     return data_dict
 
+
 def process_financial_report_using_rag_retriver(pdf_path):
     # Step 1: Extract text from PDF
-    report_text = extract_text_from_pdf(pdf_path, chunk_size=chunk_size)
+    report_text = extract_text_from_pdf(pdf_path, chunk_size=1000)
     if not report_text:
         return {"error": "Failed to extract text from PDF"}
 
     # Step 2: Extract financial metrics using LangChain LLM
-    # print("getting report text here is :-- ", report_text)
+    print("report_text",report_text)
     financial_data = extract_data_from_report(report_text)
-    # print('getting financial data here is', financial_data)
     if "error" in financial_data:
         return financial_data  # Return the error if data extraction failed
     
     return financial_data
+
+
+# error handled :--  Please install it with `pip install faiss-gpu` (for CUDA supported GPU) or `pip install faiss-cpu
