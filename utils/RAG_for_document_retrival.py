@@ -14,6 +14,7 @@ from langchain.vectorstores import FAISS
 from utils.pdf_parser import extract_text_from_pdf
 from langchain.docstore.document import Document
 from langchain.chains.qa_with_sources import load_qa_with_sources_chain
+import chromadb
 
 
 # from langchain.retrievers import VectorstoreRetriever
@@ -21,12 +22,12 @@ from langchain.chains.qa_with_sources import load_qa_with_sources_chain
 
 
 # Set up your OpenAI API key
-os.environ["OPENAI_API_KEY"] = "key value here"
+os.environ["OPENAI_API_KEY"] = "your key"
 
-llm = ChatOpenAI(model_name="gpt-4", temperature=0)
+# llm = ChatOpenAI(model_name="gpt-4", temperature=0)
 # llm = ChatOpenAI(model_name="gpt-3.5-turbo", temperature=0)
 
-# llm = ChatOpenAI(model_name="gpt-4o-mini", temperature=0)
+llm = ChatOpenAI(model_name="gpt-4o-mini", temperature=0)
 
 # chunk size for processing PDFs
 chunk_size = 1000  #Each document will be divided into chunks of 1000 characters.
@@ -171,18 +172,21 @@ def pdf_processing_with_rag_for_financial_data(pdf_path):
 #################################################################################################################################################
 
 def extract_data_from_report(report_text):
-    print('Report text being processed:', report_text)
+    # print('Report text being processed:', report_text)
+    print("came inside to work on retrival")
+    # Initialize Chroma client
+    client = chromadb.Client()
     
     # Split the report text into chunks
     text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=100)
     texts = text_splitter.split_text(report_text)
 
-    # Convert text to Document objects for FAISS indexing
+    # Convert text to Document objects for Chroma indexing
     docs = [Document(page_content=text) for text in texts]
 
-    # Create embeddings and vector store
+    # Create embeddings and vector store using Chroma
     embeddings = OpenAIEmbeddings()
-    vectorstore = FAISS.from_documents(docs, embeddings)
+    vectorstore = Chroma.from_documents(docs, embeddings, client=client, collection_name="financial_reports")
 
     # Create a retriever to fetch relevant documents
     retriever = vectorstore.as_retriever()
@@ -190,40 +194,77 @@ def extract_data_from_report(report_text):
     # Query the relevant financial data
     query = "Extract financial data and ratios from the financial report."
     relevant_docs = retriever.get_relevant_documents(query)
+    
 
     # Concatenate retrieved texts
     retrieved_text = " ".join([doc.page_content for doc in relevant_docs])
+    print("getting retrived texts here :-- ",retrieved_text)
+    # Improved prompt for better LLM interaction
+    template = """You are the CFO of a company, tasked with analyzing the financial ratios from the provided financial report in Indian Rupees (INR). Your goal is to extract key financial data, compute essential financial ratios, assess the company's financial health, and provide investment risk insights.
 
-    # Prepare the prompt with the extracted text
-    template = """
-    You are a financial analyst. Extract key financial data from the following report and convert all values to INR. 
-    Assume the exchange rate is 1 USD = 83 INR if required. All amounts in millions should be converted to actual values.
-    
-    ### Data to extract:
-    1. **Earnings Per Share (EPS)** (INR)
-    2. **Stock Price** (INR)
-    3. **Net Income** (INR)
-    4. **Total Investment** (INR)
-    5. **Current Assets** (INR)
-    6. **Current Liabilities** (INR)
-    7. **Gross Profit** (INR)
-    8. **Net Revenue** (INR)
-    9. **Total Debt** (INR)
-    10. **Total Shareholders' Equity** (INR)
-    11. **Operating Cash Flow** (INR)
-    
-    ### Calculations:
-    1. **Current Ratio** = Current Assets / Current Liabilities
-    2. **Gross Profit Margin** = (Gross Profit / Net Revenue) * 100 (If Net Revenue is unavailable, return "Not Available")
-    3. **Debt to Equity Ratio** = Total Debt / Total Shareholders' Equity
-    4. **P/E Ratio** = Stock Price / EPS
-    5. **ROI** = (Net Income / Total Investment) * 100
+        ### Data Extraction:
+        Extract the following financial data from the provided text and **convert all currency values to INR**. **Remove any non-INR currency symbols** and **convert amounts in millions to their actual values** (e.g., 1 million becomes 1,000,000). Assume any non-INR amounts should be converted based on an exchange rate you specify (e.g., 1 USD = 83 INR). Include the conversion in the report.
 
-    ### Financial Data:
-    {text}
+        - **Earnings Per Share (EPS) (INR)**
+        - **Stock Price (INR)**
+        - **Net Income (e.g., Net Profit, Net Earnings, Income After Tax) (INR)**
+        - **Total Investment (e.g., Total Capital, Capital Investment, Total Funds, Total Capital Employed, Capital Expenditure) (INR)**:
+        - Look for terms such as **"Total Capital"**, **"Capital Investment"**, **"Total Funds"**, **"Total Capital Employed"**, **"Capital Expenditure"**, or **similar terms** that indicate total investment.
+        - If none of these terms are directly available, compute **Total Investment** as the sum of **Total Debt** and **Total Shareholders' Equity**.
+        - Use this value to calculate **ROI (Return on Investment)** using the formula: 
+            - ROI = (Net Income / Total Investment) * 100.
+        - If the term or value is missing, mark as "Not Available".
+        - **Current Assets (INR)**
+        - **Current Liabilities (INR)**
+        - **Gross Profit (INR)**
+        - **Net Revenue (INR)** (If missing, mark as "Not Available")
+        - **Total Debt (INR)**
+        - **Total Shareholders' Equity (INR)**
+        - **Operating Cash Flow (INR)**
+
+        **Note**: If amounts are in millions, convert them to their actual values. If values are in USD or any non-INR currency, convert them to INR at an exchange rate you specify. Remove all currency symbols or signs and convert them to INR as float numbers.
+
+        Text:
+        {text}
+
+        ### Financial Ratio Calculations:
+        Using the extracted financial data (in INR), compute the following ratios:
+
+        - **Current Ratio**: `Current Ratio = Current Assets / Current Liabilities`
+        - **Gross Profit Margin**: If `Net Revenue` is available, `Gross Profit Margin = (Gross Profit / Net Revenue) * 100`, otherwise return "Not Available".
+        - **Debt to Equity Ratio**: `D/E Ratio = Total Debt / Total Shareholders' Equity`
+        - **Operating Cash Flow**: Report this as a standalone value.
+        - **Price to Earnings (P/E) Ratio**: `P/E Ratio = Stock Price / Earnings Per Share (EPS)`
+        - **Return on Investment (ROI)**: If both `Net Income` and `Total Investment` are available, `ROI = (Net Income / Total Investment) * 100`. If either is missing, return "Not Available".
+
+        ### Health and Investment Risk Assessment:
+        Based on the calculated ratios, assess whether the investment is risky or not. Provide insight into the **health ratio for the IT industry** and how the company's ratios compare to industry benchmarks.
+
+        ### Output Format:
+        Answer in this format:
+
+        ```plaintext
+        EPS (INR): <value>
+        Stock Price (INR): <value>
+        Net Income (INR): <value>
+        Total Investment (INR): <value> (If missing, mark as "Not Available")
+        Current Assets (INR): <value>
+        Current Liabilities (INR): <value>
+        Gross Profit (INR): <value>
+        Net Revenue (INR): <value> (If missing, mark as "Not Available")
+        Total Debt (INR): <value>
+        Total Shareholders' Equity (INR): <value>
+        Operating Cash Flow (INR): <value>
+        Current Ratio: <value>
+        Gross Profit Margin: <value> (If missing, return "Not Available")
+        D/E Ratio: <value>
+        P/E Ratio: <value>
+        ROI: <value> (If either Net Income or Total Investment is missing, return "Not Available")
+        Investment Risk: <Risk Assessment - e.g., "Risky" or "Not Risky">
+        Industry Health Ratio: <Industry-specific ratio analysis>
+        Summary: <Provide a brief summary of the company's financial health and performance based on the above ratios and suggest if it aligns with typical IT industry health benchmarks.> 
     """
     
-    print('Retrieved text:', retrieved_text)
     prompt = template.format(text=retrieved_text)
 
     # LLM interaction
@@ -274,7 +315,7 @@ def process_financial_report_using_rag_retriver(pdf_path):
         return {"error": "Failed to extract text from PDF"}
 
     # Step 2: Extract financial metrics using LangChain LLM
-    print("report_text",report_text)
+    # print("report_text",report_text)
     financial_data = extract_data_from_report(report_text)
     if "error" in financial_data:
         return financial_data  # Return the error if data extraction failed
@@ -283,3 +324,25 @@ def process_financial_report_using_rag_retriver(pdf_path):
 
 
 # error handled :--  Please install it with `pip install faiss-gpu` (for CUDA supported GPU) or `pip install faiss-cpu
+
+{
+  "Current Assets (INR)": "Not Available",
+  "Current Liabilities (INR)": "Not Available",
+  "Current Ratio": "Not Available",
+  "D/E Ratio": "Not Available",
+  "EPS (INR)": "Not Available",
+  "Gross Profit (INR)": 146052000000.0,
+  "Gross Profit Margin": 68.94,
+  "Industry Health Ratio": "Not Available",
+  "Investment Risk": "Risky",
+  "Net Income (INR)": 72361000000.0,
+  "Net Revenue (INR)": 211915000000.0,
+  "Operating Cash Flow (INR)": "Not Available",
+  "P/E Ratio": "Not Available",
+  "ROI": "Not Available",
+  "Stock Price (INR)": "Not Available",
+  "Summary": "The company's financial health appears to be under pressure with a significant net income but missing key metrics such as total investment current assets and liabilities. The gross profit margin is strong indicating effective cost management but the lack of comprehensive data raises concerns about overall financial stability. Given the missing data and the potential for volatility in the IT sector the investment is assessed as risky. Further analysis is needed to align with industry benchmarks.",
+  "Total Debt (INR)": "Not Available",
+  "Total Investment (INR)": "Not Available",
+  "Total Shareholders' Equity (INR)": "Not Available"
+}

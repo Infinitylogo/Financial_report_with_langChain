@@ -11,7 +11,7 @@ chunk_size = 10 #to control how many pages are processed in each iteration
 
 
 # # Set up your OpenAI API key
-os.environ["OPENAI_API_KEY"] = "your_key"
+os.environ["OPENAI_API_KEY"] = "your key"
 # Initialize LangChain with OpenAI LLM
 # llm = OpenAI(temperature=0)
 
@@ -360,7 +360,7 @@ def process_financial_report(pdf_path):
     report_text = extract_text_from_pdf(pdf_path, chunk_size=chunk_size)
     if not report_text:
         return {"error": "Failed to extract text from PDF"}
-
+    print("getting report text here is:--", report_text)
     # Step 2: Extract financial metrics using LangChain LLM
     financial_data = extract_data_from_report(report_text)
     if "error" in financial_data:
@@ -499,3 +499,26 @@ def process_financial_report(pdf_path):
     # Industry Health Ratio: <Industry-specific ratio analysis>
     # Summary: <Provide a brief summary of the company's financial health and performance based on the above ratios and suggest if it aligns with typical IT industry health benchmarks.>    
     # """
+
+
+
+#     {
+#   "Current Assets (INR)": 184257000000.0,
+#   "Current Liabilities (INR)": 104149000000.0,
+#   "Current Ratio": 1.77,
+#   "D/E Ratio": 0.23,
+#   "EPS (INR)": 9.68,
+#   "Gross Profit (INR)": 146052000000.0,
+#   "Gross Profit Margin": 68.94,
+#   "Industry Health Ratio": "The IT industry typically has a current ratio above 1.5 a gross profit margin around 60-70% and a D/E ratio below 0.5 indicating a healthy financial position.",
+#   "Investment Risk": "Not Risky",
+#   "Net Income (INR)": 72361000000.0,
+#   "Net Revenue (INR)": 211915000000.0,
+#   "Operating Cash Flow (INR)": 87582000000.0,
+#   "P/E Ratio": 26.0,
+#   "ROI": 35.14,
+#   "Stock Price (INR)": 252.59,
+#   "Summary": "The company's financial health appears strong with a current ratio of 1.77 indicating good short-term liquidity a gross profit margin of 68.94% suggesting efficient cost management and a low D/E ratio of 0.23 indicating low financial leverage. The P/E ratio of 26.00 is reasonable for the IT sector reflecting growth expectations. Overall these ratios align well with typical IT industry benchmarks suggesting that the company is not considered a risky investment.",
+#   "Total Debt (INR)": 47237000000.0,
+#   "Total Investment (INR)": 205753000000.0,
+#   "Total Shareholders' Equity (INR)": 206223000000.0}
