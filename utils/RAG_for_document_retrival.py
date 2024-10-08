@@ -29,11 +29,34 @@ llm = ChatOpenAI(model_name="gpt-4", temperature=0)
 # llm = ChatOpenAI(model_name="gpt-4o-mini", temperature=0)
 
 # chunk size for processing PDFs
-chunk_size = 1000 
+chunk_size = 1000  #Each document will be divided into chunks of 1000 characters.
+
+
+"""
+Reason to use 1000 as chunk size :----
+
+1. it is a common choice we can go for higher or lower as well
+2. but this size is enough to capture meaingful context for the text and it is small in terms of memory for performing queries.
+3. if we take smaller chunk, it will create more vector that makes search slower
+4. longer chunks may result in less or fewer vector where we can lose individual embeddings
+
+
+
+Reason to chose overlap as parameter :--
+
+to ensure information close to chunk boundaries is not lost as we are doing question answering here, which lead to lose data
+
+
+
+KNN --- index or ranking based on similarity --- most relavant chunks -- most similar weights --- context -- (advanced solution)
+
+
+rewrite and refactoring  -- query solutions (open ended to user)
+"""
 
 
 def load_documents_to_chroma(documents, chunk_size=1000):
-    text_splitter = RecursiveCharacterTextSplitter(chunk_size=chunk_size, chunk_overlap=50)
+    text_splitter = RecursiveCharacterTextSplitter(chunk_size=chunk_size, chunk_overlap=50) #to split the input documents into smaller chunks
     split_docs = text_splitter.split_documents(documents)
 
     # Initialize ChromaDB
@@ -46,6 +69,15 @@ def load_documents_to_chroma(documents, chunk_size=1000):
 
 
 def create_rag_pipeline(vectorstore):
+    """
+    load_qa_with_sources_chain(llm)
+    where the LLM will generate an answer based on the retrieved documents and include the source of the information.
+
+    chain_type="stuff", 
+    This defines how the retrieved documents are processed.
+    "Stuff" typically means that the documents are simply concatenated together and passed to the language model.
+    
+    """
     # Define how to combine the retrieved documents into a response
     llm = ChatOpenAI(model_name="gpt-4", temperature=0)
     combine_documents_chain = load_qa_with_sources_chain(llm)
